@@ -1,0 +1,157 @@
+{% extends 'translator_app/base.html' %}
+
+{% block title %}Mis Traducciones - Traductor de Manga{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Mis Traducciones</h1>
+    <a href="{% url 'translation_create' %}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Nueva Traducción
+    </a>
+</div>
+
+{% if translations %}
+    <div class="row">
+        {% for translation in translations %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0 text-truncate">
+                        {{ translation.title|default:"Sin título" }}
+                    </h5>
+                    
+                    {% if translation.status == 'completed' %}
+                        <span class="badge bg-success">Completado</span>
+                    {% elif translation.status == 'processing' %}
+                        <span class="badge bg-info">Procesando</span>
+                    {% elif translation.status == 'pending' %}
+                        <span class="badge bg-warning">Pendiente</span>
+                    {% elif translation.status == 'failed' %}
+                        <span class="badge bg-danger">Fallido</span>
+                    {% endif %}
+                </div>
+                
+                <div class="card-body p-2">
+                    <div class="position-relative">
+                        {% if translation.translated_image %}
+                            <a href="{% url 'translation_detail' translation.id %}">
+                                <img 
+                                    src="{{ translation.translated_image.url }}" 
+                                    class="img-fluid rounded translation-thumbnail w-100" 
+                                    alt="{{ translation.title|default:'Manga traducido' }}"
+                                >
+                            </a>
+                        {% elif translation.status == 'processing' or translation.status == 'pending' %}
+                            <div class="text-center bg-light rounded p-4" style="height: 240px; display: flex; flex-direction: column; justify-content: center;">
+                                <div class="spinner-border text-primary mx-auto mb-3" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="text-muted mb-0">Procesando traducción...</p>
+                            </div>
+                        {% elif translation.original_image %}
+                            <a href="{% url 'translation_detail' translation.id %}">
+                                <img 
+                                    src="{{ translation.original_image.url }}" 
+                                    class="img-fluid rounded translation-thumbnail w-100" 
+                                    alt="{{ translation.title|default:'Manga original' }}"
+                                >
+                                {% if translation.status == 'failed' %}
+                                <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-danger bg-opacity-50 rounded">
+                                    <span class="text-white fw-bold">Error de traducción</span>
+                                </div>
+                                {% endif %}
+                            </a>
+                        {% else %}
+                            <div class="text-center bg-light rounded p-4" style="height: 240px; display: flex; flex-direction: column; justify-content: center;">
+                                <i class="fas fa-image fa-4x text-muted mb-3"></i>
+                                <p class="text-muted mb-0">Imagen no disponible</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="card-footer bg-transparent border-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">{{ translation.created_at|date:"d/m/Y H:i" }}</small>
+                        <a href="{% url 'translation_detail' translation.id %}" class="btn btn-sm btn-outline-primary">
+                            Ver detalles
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Paginación -->
+    {% if page_obj.has_other_pages %}
+    <nav aria-label="Navegación de páginas">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1" aria-label="Primera">
+                    <span aria-hidden="true">&laquo;&laquo;</span>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Anterior">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">&laquo;&laquo;</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link">&laquo;</span>
+            </li>
+            {% endif %}
+            
+            {% for i in page_obj.paginator.page_range %}
+                {% if page_obj.number == i %}
+                <li class="page-item active">
+                    <span class="page-link">{{ i }}</span>
+                </li>
+                {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ i }}">{{ i }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Siguiente">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Última">
+                    <span aria-hidden="true">&raquo;&raquo;</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">&raquo;</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link">&raquo;&raquo;</span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    
+{% else %}
+    <div class="card shadow-sm">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-images fa-4x text-muted mb-3"></i>
+            <h3>No hay traducciones todavía</h3>
+            <p class="text-muted">Comienza subiendo una imagen de manga para traducir.</p>
+            <a href="{% url 'translation_create' %}" class="btn btn-primary mt-3">
+                <i class="fas fa-plus me-2"></i>Nueva Traducción
+            </a>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

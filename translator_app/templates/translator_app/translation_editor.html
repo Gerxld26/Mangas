@@ -1,0 +1,526 @@
+{% extends 'translator_app/base.html' %}
+{% load static %}
+
+{% block title %}Editor de Traducción - Traductor de Manga{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'translator_app/css/editor.css' %}">
+<style>
+    /* Estilos para canvas y manejo de imágenes verticales */
+    .editor-container {
+        width: 100%;
+        position: relative;
+        margin: 0;
+        padding: 0;
+        overflow: visible;
+    }
+    
+    .image-container {
+        position: relative;
+        max-height: 75vh;
+        overflow: auto;
+        scroll-behavior: smooth;
+        background-color: #f5f5f5;
+        text-align: center;
+    }
+    
+    #image-wrapper {
+        display: inline-block;
+        position: relative;
+        margin: 0 auto;
+        transform-origin: top left;
+    }
+    
+    #editor-image {
+        display: block;
+        max-width: 100%;
+        height: auto;
+    }
+    
+    #working-canvas {
+        display: block;
+        max-width: 100%;
+        height: auto;
+    }
+    
+    #hidden-canvas {
+        display: none;
+    }
+    
+    #bubble-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+    }
+    
+    .text-bubble {
+        position: absolute;
+        background-color: rgba(255, 255, 255, 0.8);
+        border: 2px dashed #007bff;
+        border-radius: 5px;
+        padding: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: move;
+        overflow: hidden;
+        font-size: 16px;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        z-index: 100;
+        pointer-events: auto;
+        transition: transform 0.1s ease;
+    }
+    
+    .text-bubble.selected {
+        border-color: #ff3d00;
+        border-style: solid;
+        box-shadow: 0 0 8px rgba(255, 61, 0, 0.5);
+        z-index: 101;
+    }
+    
+    .text-bubble p {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    
+    .resize-handle {
+        position: absolute;
+        width: 15px;
+        height: 15px;
+        bottom: 0;
+        right: 0;
+        background-color: #007bff;
+        border: 2px solid white;
+        border-radius: 50%;
+        cursor: se-resize;
+        z-index: 102;
+    }
+    
+    /* Controles de zoom */
+    .zoom-controls {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: 15px;
+        background-color: #f8f9fa;
+        padding: 5px 10px;
+        border-radius: 20px;
+    }
+    
+    .zoom-level {
+        font-size: 0.8rem;
+        font-weight: 600;
+        min-width: 45px;
+        text-align: center;
+    }
+    
+    /* Navegación vertical */
+    .vertical-nav {
+        position: fixed;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 1000;
+    }
+    
+    .vertical-nav button {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: #007bff;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        cursor: pointer;
+    }
+    
+    .vertical-nav button:hover {
+        background-color: #0056b3;
+    }
+    
+    /* Indicador de posición */
+    .position-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: rgba(0,0,0,0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        z-index: 1000;
+    }
+    
+    /* Lista de burbujas */
+    .bubble-list {
+        max-height: 250px;
+        overflow-y: auto;
+        margin-bottom: 10px;
+    }
+    
+    .bubble-item {
+        padding: 8px 10px;
+        margin: 5px 0;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .bubble-item:hover {
+        background-color: #e9ecef;
+    }
+    
+    .bubble-item.active {
+        background-color: #007bff;
+        color: white;
+    }
+    
+    /* Panel de edición */
+    .edit-panel {
+        padding: 15px;
+    }
+    
+    .font-preview {
+        min-height: 40px;
+        padding: 8px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background-color: #f8f9fa;
+    }
+    
+    .tools-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .tool-btn {
+        padding: 0.25rem 0.5rem;
+        min-width: 2.5rem;
+    }
+    
+    /* Spinner para carga */
+    .spinner-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    
+    /* Adaptaciones para móviles */
+    @media (max-width: 768px) {
+        .image-container {
+            max-height: 60vh;
+        }
+        
+        .vertical-nav {
+            right: 10px;
+        }
+        
+        .vertical-nav button {
+            width: 35px;
+            height: 35px;
+        }
+        
+        .zoom-controls {
+            margin-left: 5px;
+            padding: 3px 8px;
+        }
+    }
+    .image-container {
+    position: relative;
+    max-height: 75vh;
+    overflow: auto;
+    scroll-behavior: smooth;
+    background-color: #f5f5f5;
+    text-align: center;
+    /* Asegurar que siempre haya scroll si es necesario */
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#image-wrapper {
+    display: inline-block;
+    position: relative;
+    margin: 0 auto;
+    transform-origin: top left;
+    /* Prevenir que la imagen se recorte */
+    min-height: 100px;
+    /* Asegurar que el wrapper siempre tenga tamaño adecuado */
+    width: auto;
+}
+
+/* Mejorar visualización de imagen en todos los modos */
+#working-canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+}
+
+/* Burbujas de texto - arreglar problemas de arrastre */
+.text-bubble {
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.8);
+    border: 2px dashed #007bff;
+    border-radius: 5px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: move;
+    overflow: hidden;
+    font-size: 16px;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    z-index: 100;
+    pointer-events: auto;
+    /* Eliminar transición que podría interferir con arrastre */
+    transition: none;
+    /* Prevenir selección de texto al arrastrar */
+    user-select: none;
+}
+
+/* Clase para modo vertical específico */
+.vertical-image #image-wrapper {
+    min-height: 300px;
+    width: 100%;
+}
+
+/* Estilos para imágenes con zoom */
+.image-zoomed {
+    margin: 0;
+    transform-origin: top left;
+}
+
+/* Prevenir interacciones no deseadas durante arrastre */
+.dragging {
+    cursor: grabbing !important;
+    pointer-events: none;
+}
+
+/* Añadir clase global para cuando se está arrastrando */
+body.dragging-active {
+    cursor: grabbing;
+    user-select: none;
+}
+
+/* Asegurar que el canvas tenga tamaño adecuado */
+#working-canvas, #hidden-canvas {
+    max-width: 100%;
+    height: auto;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>Editor de Traducción</h1>
+        <div>
+            <a href="{% url 'translation_detail' translation.id %}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-2"></i>Volver a detalles
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Panel izquierdo con la imagen y burbujas -->
+        <div class="col-lg-8 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <button id="toggle-bubbles" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye"></i> Mostrar/Ocultar burbujas
+                        </button>
+                        <span id="image-info" class="badge bg-primary ms-3">0 × 0px</span>
+                        <!-- Los controles de zoom se añadirán aquí dinámicamente -->
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="editor-container">
+                        <div class="image-container" id="image-container">
+                            <div id="image-wrapper">
+                                <!-- El canvas va a reemplazar a la imagen -->
+                                <canvas id="working-canvas"></canvas>
+                                <canvas id="hidden-canvas" class="d-none"></canvas>
+                                <!-- Contenedor para las burbujas -->
+                                <div id="bubble-container"></div>
+                                <!-- Spinner de carga -->
+                                <div id="canvas-spinner" class="spinner-overlay d-none">
+                                    <div class="spinner-border text-light" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Imagen original oculta que servirá para cargar inicialmente -->
+                        <img src="{{ translation.original_image.url }}" id="editor-image" class="d-none" 
+                             alt="Imagen original" crossorigin="anonymous">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3 mb-3">
+                <button id="save-changes" class="btn btn-primary">
+                    <i class="fas fa-save me-2"></i>Guardar cambios
+                </button>
+                <button id="reset-changes" class="btn btn-outline-secondary ms-2">
+                    <i class="fas fa-undo me-2"></i>Deshacer cambios
+                </button>
+                <button id="regenerate-image" class="btn btn-success ms-2">
+                    <i class="fas fa-sync me-2"></i>Regenerar imagen
+                </button>
+                <button id="download-image" class="btn btn-info ms-2">
+                    <i class="fas fa-download me-2"></i>Descargar
+                </button>
+            </div>
+        </div>
+        
+        <!-- Panel derecho de control -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Edición de texto</h5>
+                </div>
+                <div class="card-body edit-panel">
+                    <!-- Mensaje cuando no hay selección -->
+                    <div id="no-selection" class="text-center py-4">
+                        <i class="fas fa-mouse-pointer fa-3x text-muted mb-3"></i>
+                        <p>Selecciona una burbuja para editar su texto</p>
+                    </div>
+                    
+                    <!-- Panel de edición (inicialmente oculto) -->
+                    <div id="bubble-editor" class="d-none">
+                        <h6 class="mb-3">Texto detectado original:</h6>
+                        <p id="original-text" class="text-muted border-bottom pb-2"></p>
+                        
+                        <div class="form-group mt-3">
+                            <label for="translated-text">Texto traducido:</label>
+                            <textarea id="translated-text" class="form-control" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-group mt-2">
+                            <button id="translate-to-spanish" class="btn btn-info btn-sm w-100">
+                                <i class="fas fa-language me-2"></i>Traducir al español
+                            </button>
+                        </div>
+                        
+                        <div class="form-group mt-3">
+                            <label for="font-size">Tamaño de fuente:</label>
+                            <div class="input-group">
+                                <input type="number" id="font-size" class="form-control" min="8" max="72" value="16">
+                                <span class="input-group-text">px</span>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group mt-3 font-selector">
+                            <label for="font-family">Tipo de letra:</label>
+                            <select id="font-family" class="form-control">
+                                <option value="Arial, sans-serif">Arial</option>
+                                <option value="'Comic Sans MS', cursive">Comic Sans</option>
+                                <option value="'Courier New', monospace">Courier New</option>
+                                <option value="Georgia, serif">Georgia</option>
+                                <option value="Impact, sans-serif">Impact</option>
+                                <option value="'Times New Roman', serif">Times New Roman</option>
+                                <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                                <option value="Verdana, sans-serif">Verdana</option>
+                            </select>
+                            <div class="font-preview mt-2" id="font-preview">
+                                Vista previa de la fuente
+                            </div>
+                        </div>
+                        
+                        <div class="form-group mt-3">
+                            <label>Alineación del texto:</label>
+                            <div class="btn-group w-100">
+                                <button id="align-left" class="btn btn-outline-secondary" title="Alinear a la izquierda">
+                                    <i class="fas fa-align-left"></i>
+                                </button>
+                                <button id="align-center" class="btn btn-outline-secondary active" title="Centrar">
+                                    <i class="fas fa-align-center"></i>
+                                </button>
+                                <button id="align-right" class="btn btn-outline-secondary" title="Alinear a la derecha">
+                                    <i class="fas fa-align-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="tools-container mt-3">
+                            <button id="move-up" class="btn btn-sm btn-outline-secondary tool-btn" title="Mover arriba">
+                                <i class="fas fa-arrow-up"></i>
+                            </button>
+                            <button id="move-down" class="btn btn-sm btn-outline-secondary tool-btn" title="Mover abajo">
+                                <i class="fas fa-arrow-down"></i>
+                            </button>
+                            <button id="move-left" class="btn btn-sm btn-outline-secondary tool-btn" title="Mover a la izquierda">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button id="move-right" class="btn btn-sm btn-outline-secondary tool-btn" title="Mover a la derecha">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button id="delete-bubble" class="btn btn-sm btn-outline-danger tool-btn ms-auto" title="Eliminar burbuja">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Texto detectado <span id="bubble-count" class="badge bg-light text-dark">0</span></h5>
+                </div>
+                <div class="card-body">
+                    <div id="bubble-list" class="bubble-list mb-2">
+                        <!-- Lista de burbujas generada con JavaScript -->
+                    </div>
+                    <button id="add-bubble" class="btn btn-outline-primary btn-sm w-100">
+                        <i class="fas fa-plus me-2"></i>Añadir nueva burbuja
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container para notificaciones -->
+<div id="toast-container" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Datos para el editor
+    const translationData = {
+        id: {{ translation.id }},
+        regions: {{ translation.translated_text|safe }}
+    };
+</script>
+<script src="{% static 'translator_app/js/editor.js' %}"></script>
+{% endblock %}

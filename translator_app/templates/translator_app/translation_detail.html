@@ -1,0 +1,241 @@
+{% extends 'translator_app/base.html' %}
+
+{% block title %}Detalle de Traducción - Traductor de Manga{% endblock %}
+
+{% block extra_css %}
+<style>
+    .comparison-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    @media (min-width: 768px) {
+        .comparison-container {
+            flex-direction: row;
+        }
+    }
+    
+    .image-card {
+        flex: 1;
+        position: relative;
+    }
+    
+    .image-container {
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+    }
+    
+    .image-container img {
+        max-width: 100%;
+        max-height: 70vh;
+        object-fit: contain;
+    }
+    
+    .status-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        border-radius: 5px;
+    }
+    
+    .spinner {
+        width: 3rem;
+        height: 3rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="translation-detail" data-translation-id="{{ translation.id }}" data-translation-status="{{ translation.status }}">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ translation.title|default:"Traducción sin título" }}</h1>
+        <div>
+            <a href="{% url 'translation_list' %}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-2"></i>Volver a la lista
+            </a>
+            {% if translation.translated_image %}
+            <a href="{% url 'translation_editor' translation.id %}" class="btn btn-warning ms-2">
+                <i class="fas fa-edit me-2"></i>Editar traducción
+            </a>
+            {% endif %}
+            <a href="{% url 'translation_create' %}" class="btn btn-primary ms-2">
+                <i class="fas fa-plus me-2"></i>Nueva Traducción
+            </a>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Información</h5>
+                
+                {% if translation.status == 'completed' %}
+                    <span class="badge bg-success">Completado</span>
+                {% elif translation.status == 'processing' %}
+                    <span class="badge bg-info">Procesando</span>
+                {% elif translation.status == 'pending' %}
+                    <span class="badge bg-warning">Pendiente</span>
+                {% elif translation.status == 'failed' %}
+                    <span class="badge bg-danger">Fallido</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Fecha:</strong> {{ translation.created_at|date:"d/m/Y H:i" }}</p>
+                    <p><strong>Idioma origen:</strong> {{ translation.get_source_language_display }}</p>
+                    <p><strong>Idioma destino:</strong> {{ translation.get_target_language_display }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Estado:</strong> {{ translation.get_status_display }}</p>
+                    <p><strong>Última actualización:</strong> {{ translation.updated_at|date:"d/m/Y H:i" }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="comparison-container">
+        <!-- Imagen Original -->
+        <div class="card image-card">
+            <div class="card-header">
+                <h5 class="mb-0">Imagen Original</h5>
+            </div>
+            <div class="card-body p-2">
+                <div class="image-container">
+                    {% if translation.original_image %}
+                        <img src="{{ translation.original_image.url }}" alt="Imagen original" class="img-fluid">
+                    {% else %}
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-image fa-4x mb-3"></i>
+                            <p>Imagen no disponible</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer text-center">
+                {% if translation.original_image %}
+                    <a href="{{ translation.original_image.url }}" class="btn btn-sm btn-outline-primary" download>
+                        <i class="fas fa-download me-1"></i>Descargar original
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Imagen Traducida -->
+        <div class="card image-card">
+            <div class="card-header">
+                <h5 class="mb-0">Imagen Traducida</h5>
+            </div>
+            <div class="card-body p-2">
+                <div class="image-container">
+                    {% if translation.translated_image %}
+                        <img src="{{ translation.translated_image.url }}" alt="Imagen traducida" class="img-fluid">
+                    {% elif translation.status == 'processing' or translation.status == 'pending' %}
+                        <div class="loading-overlay">
+                            <div class="spinner-border spinner" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                            <h5>Procesando traducción...</h5>
+                            <p>Esto puede tardar unos momentos.</p>
+                        </div>
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-language fa-4x mb-3"></i>
+                            <p>Traducción en proceso</p>
+                        </div>
+                    {% elif translation.status == 'failed' %}
+                        <div class="text-center text-danger py-5">
+                            <i class="fas fa-exclamation-triangle fa-4x mb-3"></i>
+                            <p>Error en la traducción</p>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-language fa-4x mb-3"></i>
+                            <p>Traducción no disponible</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer text-center">
+                {% if translation.translated_image %}
+                    <a href="{{ translation.translated_image.url }}" class="btn btn-sm btn-outline-primary" download>
+                        <i class="fas fa-download me-1"></i>Descargar traducción
+                    </a>
+                    <a href="{% url 'translation_editor' translation.id %}" class="btn btn-sm btn-outline-warning ms-2">
+                        <i class="fas fa-edit me-1"></i>Editar texto
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    {% if translation.status == 'failed' %}
+    <div class="alert alert-danger mt-4">
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>Error en la traducción</h5>
+        <p>Lo sentimos, ocurrió un error durante el proceso de traducción. Por favor, intenta con otra imagen o contacta al soporte si el problema persiste.</p>
+        <div class="mt-3">
+            <a href="{% url 'translation_create' %}" class="btn btn-primary">
+                <i class="fas fa-redo me-2"></i>Intentar con otra imagen
+            </a>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if translation.detected_text and translation.detected_text|length > 0 %}
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Texto Detectado</h5>
+            {% if translation.translated_image %}
+            <a href="{% url 'translation_editor' translation.id %}" class="btn btn-sm btn-warning">
+                <i class="fas fa-edit me-1"></i>Editar textos
+            </a>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Texto Original</th>
+                            <th>Texto Traducido</th>
+                            <th>Confianza</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for region in translation.translated_text %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ region.text }}</td>
+                            <td>{{ region.translated_text }}</td>
+                            <td>{{ region.confidence|floatformat:2 }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends 'translator_app/base.html' %}
+
+{% block title %}Nueva Traducción - Traductor de Manga{% endblock %}
+
+{% block extra_css %}
+<style>
+    .preview-container {
+        max-height: 400px;
+        overflow: hidden;
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .preview-container img {
+        max-height: 100%;
+        max-width: 100%;
+        object-fit: contain;
+    }
+    
+    .form-container {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="mb-4 text-center">
+            <h1>Nueva Traducción</h1>
+            <p class="text-muted">Sube una imagen de manga para traducirla</p>
+        </div>
+        
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="translation-form">
+                    {% csrf_token %}
+                    
+                    <div class="row g-4">
+                        <!-- Título (opcional) -->
+                        <div class="col-12">
+                            <label for="{{ form.title.id_for_label }}" class="form-label">
+                                Título (opcional)
+                            </label>
+                            {{ form.title }}
+                            {% if form.title.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.title.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Previsualización de imagen -->
+                        <div class="col-12">
+                            <div class="preview-container d-none" id="image-preview">
+                                <img src="" alt="Vista previa" id="preview-img">
+                            </div>
+                        </div>
+                        
+                        <!-- Campo de imagen -->
+                        <div class="col-12">
+                            <label for="{{ form.original_image.id_for_label }}" class="form-label">
+                                Selecciona una imagen de manga
+                                <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                {{ form.original_image }}
+                            </div>
+                            <div class="form-text">
+                                Formatos aceptados: JPG, PNG, WebP. Tamaño máximo: 10MB.
+                            </div>
+                            {% if form.original_image.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.original_image.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Idioma origen -->
+                        <div class="col-md-6">
+                            <label for="{{ form.source_language.id_for_label }}" class="form-label">
+                                Idioma de origen
+                                <span class="text-danger">*</span>
+                            </label>
+                            {{ form.source_language }}
+                            {% if form.source_language.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.source_language.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Idioma destino -->
+                        <div class="col-md-6">
+                            <label for="{{ form.target_language.id_for_label }}" class="form-label">
+                                Idioma de destino
+                                <span class="text-danger">*</span>
+                            </label>
+                            {{ form.target_language }}
+                            {% if form.target_language.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.target_language.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Botones de acción -->
+                        <div class="col-12 text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-language me-2"></i>Traducir Imagen
+                            </button>
+                            <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-lg ms-2">
+                                Cancelar
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="mt-4 card bg-light">
+            <div class="card-body">
+                <h5><i class="fas fa-info-circle text-primary me-2"></i>Consejos para mejores resultados</h5>
+                <ul class="mb-0">
+                    <li>Sube imágenes con buena resolución para mejor detección de texto.</li>
+                    <li>Evita imágenes con muchos efectos visuales que puedan interferir con el texto.</li>
+                    <li>Si el idioma no se detecta correctamente, selecciona manualmente el idioma de origen.</li>
+                    <li>Para mejor rendimiento, recorta la imagen para incluir solo la página del manga.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Previsualización de imagen
+        const imageInput = document.getElementById('{{ form.original_image.id_for_label }}');
+        const previewContainer = document.getElementById('image-preview');
+        const previewImg = document.getElementById('preview-img');
+        
+        imageInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    previewImg.setAttribute('src', e.target.result);
+                    previewContainer.classList.remove('d-none');
+                }
+                
+                reader.readAsDataURL(this.files[0]);
+            } else {
+                previewContainer.classList.add('d-none');
+                previewImg.setAttribute('src', '');
+            }
+        });
+    });
+</script>
+{% endblock %}
