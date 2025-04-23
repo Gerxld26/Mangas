@@ -1,21 +1,16 @@
 import logging
-import json
 import re
 import os
 from openai import OpenAI
 from django.conf import settings
 from dotenv import load_dotenv
 
-# Cargar variables de entorno
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 class DeepseekAPIService:
-    """Servicio para interactuar con la API de OpenRouter"""
-    
     def __init__(self):
-        # Obtener credenciales desde variables de entorno
         self.api_key = os.environ.get("OPENROUTER_API_KEY")
         self.base_url = os.environ.get("OPENROUTER_BASE_URL")
         self.default_model = os.environ.get("DEFAULT_MODEL", "anthropic/claude-3-haiku")
@@ -23,7 +18,6 @@ class DeepseekAPIService:
         self.default_max_tokens = int(os.environ.get("DEFAULT_MAX_TOKENS", 200))
         
         try:
-            # Inicializar cliente OpenAI con OpenRouter
             self.client = OpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url
@@ -33,66 +27,66 @@ class DeepseekAPIService:
             logger.error(f"Error al inicializar cliente OpenAI: {str(e)}")
             self.client = None
     
-    def clean_translation(self, text):
-        """
-        Limpia el texto traducido para eliminar prefijos y otros textos innecesarios
+    def clean_ocr_text(self, text):
+        if not text:
+            return ""
         
-        Args:
-            text (str): Texto traducido a limpiar
-            
-        Returns:
-            str: Texto limpio
-        """
+        # Eliminar artefactos específicos
+        text = re.sub(r'^sa\s*\d+\s*wa\s*\d+\s*', '', text, flags=re.IGNORECASE)
+        
+        # Corregir errores comunes de OCR
+        text = text.replace('thcsc', 'these')
+        text = text.replace('bchind', 'behind')
+        text = text.replace('Thcy', 'They')
+        text = text.replace('andl', 'and')
+        text = text.replace('scaredl', 'scared')
+        text = text.replace('Ihat s', "That's")
+        text = text.replace('inl', 'in')
+        text = text.replace('idopting', 'adopting')
+        text = text.replace('Lincla Bl 7ir', 'Linda Blair')
+        
+        # Limpiar texto general
+        text = re.sub(r'[^\w\s\.\,\!\?\-]', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
+
+    def clean_translation(self, text):
         if not text:
             return ""
             
-        # Patrones a eliminar
         patterns = [
-            # Patrones específicos que has observado en las traducciones
             r"^La traducción del texto coreano '[^']+' al español(?: sería)?:\s*",
             r"^La traducción al español de '[^']+' es:\s*",
             r"^La traducción al español(?: sería)?:\s*",
             r"^Traducción al español:\s*",
             r"^Aquí está la traducción al español:\s*",
             r"^Gwenchanheusimyeon\s*",
-            # Eliminar comillas y apóstrofes extra
             r"^[\"']|[\"']$",
-            # Eliminar líneas en blanco al principio
             r"^\n+",
-            # Mensajes de error o explicaciones
             r"^Lo siento, pero .*$",
         ]
         
-        # Aplicar cada patrón
         cleaned_text = text
         for pattern in patterns:
             cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.MULTILINE)
         
-        # Eliminar líneas en blanco al principio y final
         cleaned_text = cleaned_text.strip()
         
-        # En caso de que queden comillas
         if cleaned_text.startswith('"') and cleaned_text.endswith('"'):
             cleaned_text = cleaned_text[1:-1]
         
-        # Si no hay texto después de la limpieza, devolver el texto original
         if not cleaned_text and text:
             return text
             
         return cleaned_text
     
+    def preserve_proper_names(self, text):
+        name_pattern = r'- ([A-Z][a-z]+ [A-Z][a-z]+)'
+        matches = re.findall(name_pattern, text)
+        return matches[0] if matches else None
+    
     def translate_text(self, text, source_lang='auto', target_lang='es'):
-        """
-        Traduce texto utilizando la API de OpenRouter
-        
-        Args:
-            text (str): Texto a traducir
-            source_lang (str): Código de idioma de origen
-            target_lang (str): Código de idioma de destino
-            
-        Returns:
-            dict: Respuesta con la traducción
-        """
         if not text:
             logger.warning("Se intentó traducir texto vacío")
             return {'translated_text': ''}
@@ -102,31 +96,35 @@ class DeepseekAPIService:
             return {'translated_text': f"Error: No se pudo traducir '{text}'"}
         
         try:
-            # Crear prompt para la traducción - especificar que queremos SOLO la traducción
-            prompt = f"""Traduce solo este texto del coreano al español sin agregar explicaciones ni comentarios:
-
-"{text}"
-
-Importante: Tu respuesta debe contener SOLO la traducción, sin frases introductorias como "La traducción es..." ni comillas."""
+            text = self.clean_ocr_text(text)
             
-            # Realizar llamada a la API a través del cliente OpenAI
+            prompt = f"""Traduce literalmente este texto al español, conservando:
+    - La estructura original de las frases
+    - Todos los matices emocionales
+    - Puntuación y estilo
+    - Nombres propios
+
+    Texto original: "{text}"
+
+    Traducción:"""
+            
             logger.info(f"Enviando solicitud de traducción para: '{text}'")
             
             response = self.client.chat.completions.create(
                 model=self.default_model,
                 messages=[
-                    {"role": "system", "content": "Eres un traductor preciso del coreano al español. Responde SOLO con la traducción, sin texto adicional."},
+                    {
+                        "role": "system", 
+                        "content": "Eres un traductor preciso que mantiene la estructura y emoción del texto original."
+                    },
                     {"role": "user", "content": prompt}
                 ],
-                temperature=self.default_temperature,
+                temperature=0.1,
                 max_tokens=self.default_max_tokens
             )
             
-            # Procesar respuesta
             if response and response.choices and len(response.choices) > 0:
                 translated_text = response.choices[0].message.content
-                
-                # Limpiar y mejorar la traducción
                 cleaned_text = self.clean_translation(translated_text)
                 
                 logger.info(f"Traducción: '{translated_text}' → Limpia: '{cleaned_text}'")
@@ -144,25 +142,12 @@ Importante: Tu respuesta debe contener SOLO la traducción, sin frases introduct
             return {'translated_text': f"Error: {str(e)}"}
     
     def translate_manga_text(self, text_regions, source_lang='auto', target_lang='es'):
-        """
-        Traduce múltiples regiones de texto de un manga
-        
-        Args:
-            text_regions (list): Lista de diccionarios con texto y coordenadas
-            source_lang (str): Código de idioma de origen
-            target_lang (str): Código de idioma de destino
-            
-        Returns:
-            list: Lista de diccionarios con el texto traducido y las coordenadas originales
-        """
-        # Extraer texto de las regiones
         text_items = [(i, region.get('text', '')) for i, region in enumerate(text_regions) if region.get('text')]
         
         if not text_items:
             logger.warning("No hay textos para traducir")
             return text_regions
         
-        # Caso especial para signos de puntuación
         special_cases = {
             "!?": "¡¿?!",
             "!": "¡!",
@@ -173,22 +158,26 @@ Importante: Tu respuesta debe contener SOLO la traducción, sin frases introduct
             "": ""
         }
         
-        # Traducir cada región
+        context = " ".join([region.get('text', '') for region in text_regions if region.get('text')])
+        
         translated_regions = []
         for i, region in enumerate(text_regions):
             region_copy = region.copy()
             text = region.get('text', '')
             
-            # Solo traducir si hay texto
             if text:
-                # Caso especial para puntuación
                 if text in special_cases:
                     region_copy['translated_text'] = special_cases[text]
                     logger.info(f"Caso especial para '{text}': '{special_cases[text]}'")
                 else:
                     try:
-                        # Intentar traducir con la API
-                        translation_result = self.translate_text(text, source_lang, target_lang)
+                        if i > 0 and i < len(text_regions) - 1:
+                            prev_text = text_regions[i-1].get('translated_text', '')
+                            context_prompt = f"Contexto previo: {prev_text}\n\nTexto a traducir: {text}"
+                            translation_result = self.translate_text(context_prompt, source_lang, target_lang)
+                        else:
+                            translation_result = self.translate_text(text, source_lang, target_lang)
+                        
                         region_copy['translated_text'] = translation_result.get('translated_text', '')
                     except Exception as e:
                         logger.error(f"Error al traducir región {i}: {str(e)}")
@@ -198,5 +187,28 @@ Importante: Tu respuesta debe contener SOLO la traducción, sin frases introduct
             
             translated_regions.append(region_copy)
         
+        translated_regions = self.post_process_translations(translated_regions)
+        
         logger.info(f"Se procesaron {len(translated_regions)} regiones de texto")
         return translated_regions
+        
+    def post_process_translations(self, regions):
+        for i in range(len(regions)):
+            if 'translated_text' in regions[i]:
+                text = regions[i]['translated_text']
+                
+                text = text.replace("bares", "barrotes")
+                
+                text = text.replace(" ,", ",").replace(" .", ".")
+                
+                text = re.sub(r'(\s*)¿', r' ¿', text)
+                text = re.sub(r'(\s*)¡', r' ¡', text)
+                
+                if "- " in regions[i].get('text', '') and "- " not in text:
+                    original_name = re.search(r'- ([A-Za-z ]+)$', regions[i]['text'])
+                    if original_name:
+                        text = re.sub(r'(?:- )?([a-zA-Z]+)$', f"- {original_name.group(1)}", text)
+                
+                regions[i]['translated_text'] = text
+                
+        return regions

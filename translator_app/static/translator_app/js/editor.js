@@ -76,7 +76,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         showLoading(false);
         
-        // Inicializar historial
         saveToHistory();
     }
     
@@ -100,7 +99,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         imageWrapper.style.display = 'block';
         
-        // Forzar reflow para aplicar cambios
         imageContainer.offsetHeight;
     }
 
@@ -167,7 +165,6 @@ document.addEventListener('DOMContentLoaded', function() {
             setZoomMode('normal');
         }
         
-        // Asegurar que la imagen se vea correctamente después de cambiar el zoom
         setTimeout(ensureImageVisibility, 50);
     }
     
@@ -1018,15 +1015,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Configurar manejo de descarga para ambos botones
     function setupDownloadHandlers() {
-        // Para el botón de exportar imagen
         const exportBtn = document.getElementById('export-image');
         if (exportBtn) {
             exportBtn.addEventListener('click', downloadProcessedImage);
         }
         
-        // Para el botón de descarga en el HTML
         const downloadBtn = document.getElementById('download-image');
         if (downloadBtn) {
             downloadBtn.addEventListener('click', downloadProcessedImage);
@@ -1040,7 +1034,6 @@ document.addEventListener('DOMContentLoaded', function() {
             hiddenContext.clearRect(0, 0, hiddenCanvas.width, hiddenCanvas.height);
             hiddenContext.drawImage(editorImage, 0, 0, originalImageWidth, originalImageHeight);
             
-            // Siempre incluir las burbujas en la descarga
             translatedRegions.forEach(region => {
                 if (!region.bbox_simple || !region.translated_text) return;
                 
@@ -1238,7 +1231,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     let autoSaveTimer = null;
-    const autoSaveInterval = 60000; // 1 minuto
+    const autoSaveInterval = 60000; 
     
     function setupAutoSave() {
         if (autoSaveTimer) {
@@ -1368,7 +1361,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeExtraTools();
     setupDownloadHandlers();
     
-    // Aplicar estilos CSS adicionales para corregir problemas
     function applyFixStyles() {
         const style = document.createElement('style');
         style.textContent = `

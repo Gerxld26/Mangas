@@ -41,7 +41,6 @@
                     {% csrf_token %}
                     
                     <div class="row g-4">
-                        <!-- Título (opcional) -->
                         <div class="col-12">
                             <label for="{{ form.title.id_for_label }}" class="form-label">
                                 Título (opcional)
@@ -54,14 +53,13 @@
                             {% endif %}
                         </div>
                         
-                        <!-- Previsualización de imagen -->
                         <div class="col-12">
                             <div class="preview-container d-none" id="image-preview">
                                 <img src="" alt="Vista previa" id="preview-img">
                             </div>
                         </div>
                         
-                        <!-- Campo de imagen -->
+                      
                         <div class="col-12">
                             <label for="{{ form.original_image.id_for_label }}" class="form-label">
                                 Selecciona una imagen de manga
@@ -80,7 +78,7 @@
                             {% endif %}
                         </div>
                         
-                        <!-- Idioma origen -->
+                       
                         <div class="col-md-6">
                             <label for="{{ form.source_language.id_for_label }}" class="form-label">
                                 Idioma de origen
@@ -94,7 +92,6 @@
                             {% endif %}
                         </div>
                         
-                        <!-- Idioma destino -->
                         <div class="col-md-6">
                             <label for="{{ form.target_language.id_for_label }}" class="form-label">
                                 Idioma de destino
@@ -108,7 +105,6 @@
                             {% endif %}
                         </div>
                         
-                        <!-- Botones de acción -->
                         <div class="col-12 text-center mt-4">
                             <button type="submit" class="btn btn-primary btn-lg">
                                 <i class="fas fa-language me-2"></i>Traducir Imagen
@@ -140,7 +136,6 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Previsualización de imagen
         const imageInput = document.getElementById('{{ form.original_image.id_for_label }}');
         const previewContainer = document.getElementById('image-preview');
         const previewImg = document.getElementById('preview-img');

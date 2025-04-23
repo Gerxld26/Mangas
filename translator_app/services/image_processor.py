@@ -13,57 +13,6 @@ class ImageProcessor:
         self.fonts = {}
         self._load_fonts()
     
-    def _load_fonts(self):
-        try:
-            base_dir = Path(__file__).resolve().parent.parent
-            fonts_dir = base_dir / 'static' / 'translator_app' / 'fonts'
-            os.makedirs(fonts_dir, exist_ok=True)
-            
-            windows_fonts = {
-                'es': 'C:\\Windows\\Fonts\\arial.ttf',
-                'en': 'C:\\Windows\\Fonts\\arial.ttf',
-                'ja': 'C:\\Windows\\Fonts\\msgothic.ttc',
-                'ko': 'C:\\Windows\\Fonts\\malgun.ttf',
-                'zh': 'C:\\Windows\\Fonts\\simsun.ttc',
-            }
-            
-            linux_fonts = {
-                'es': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                'en': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                'ja': '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf',
-                'ko': '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
-                'zh': '/usr/share/fonts/truetype/arphic/uming.ttc',
-            }
-            
-            for lang in ['es', 'en', 'ja', 'ko', 'zh']:
-                win_font = windows_fonts.get(lang)
-                if win_font and os.path.exists(win_font):
-                    self.fonts[lang] = win_font
-                    continue
-                
-                linux_font = linux_fonts.get(lang)
-                if linux_font and os.path.exists(linux_font):
-                    self.fonts[lang] = linux_font
-                    continue
-                
-                self.fonts[lang] = None
-            
-            logger.info(f"Fuentes cargadas: {self.fonts}")
-            
-        except Exception as e:
-            logger.error(f"Error al cargar fuentes: {str(e)}")
-    
-    def get_font(self, language, size=24):
-        font_path = self.fonts.get(language, self.fonts.get('en'))
-        
-        if font_path and os.path.exists(font_path):
-            try:
-                return ImageFont.truetype(font_path, size)
-            except Exception as e:
-                logger.error(f"Error al cargar fuente {font_path}: {str(e)}")
-        
-        return ImageFont.load_default()
-    
     def remove_original_text(self, image_path, text_regions):
         try:
             image = cv2.imread(image_path)
@@ -82,7 +31,6 @@ class ImageProcessor:
                     if pts:
                         pts = np.array(pts, np.int32)
                         pts = pts.reshape((-1, 1, 2))
-                        padding = 5
                         cv2.fillPoly(mask, [pts], 255)
                 
                 elif 'bbox_simple' in region:
@@ -192,30 +140,95 @@ class ImageProcessor:
         
         return combined
     
+    def _load_fonts(self):
+        try:
+            base_dir = Path(__file__).resolve().parent.parent
+            fonts_dir = base_dir / 'static' / 'translator_app' / 'fonts'
+            os.makedirs(fonts_dir, exist_ok=True)
+            
+            windows_fonts = {
+                'es': 'C:\\Windows\\Fonts\\arial.ttf',
+                'en': 'C:\\Windows\\Fonts\\arial.ttf',
+                'ja': 'C:\\Windows\\Fonts\\msgothic.ttc',
+                'ko': 'C:\\Windows\\Fonts\\malgun.ttf',
+                'zh': 'C:\\Windows\\Fonts\\simsun.ttc',
+            }
+            
+            linux_fonts = {
+                'es': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                'en': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                'ja': '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf',
+                'ko': '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
+                'zh': '/usr/share/fonts/truetype/arphic/uming.ttc',
+            }
+            
+            for lang in ['es', 'en', 'ja', 'ko', 'zh']:
+                win_font = windows_fonts.get(lang)
+                if win_font and os.path.exists(win_font):
+                    self.fonts[lang] = win_font
+                    continue
+                
+                linux_font = linux_fonts.get(lang)
+                if linux_font and os.path.exists(linux_font):
+                    self.fonts[lang] = linux_font
+                    continue
+                
+                self.fonts[lang] = None
+            
+            logger.info(f"Fuentes cargadas: {self.fonts}")
+            
+        except Exception as e:
+            logger.error(f"Error al cargar fuentes: {str(e)}")
+    
+    def get_font(self, language, size=24):
+        font_path = self.fonts.get(language, self.fonts.get('en'))
+        
+        if font_path and os.path.exists(font_path):
+            try:
+                return ImageFont.truetype(font_path, size)
+            except Exception as e:
+                logger.error(f"Error al cargar fuente {font_path}: {str(e)}")
+        
+        return ImageFont.load_default()
+    
     def add_translated_text(self, image, text_regions, target_language='es'):
         try:
-            # Crear imagen PIL
-            pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            image_copy = image.copy()
+            pil_image = Image.fromarray(cv2.cvtColor(image_copy, cv2.COLOR_BGR2RGB))
             draw = ImageDraw.Draw(pil_image)
             
-            for region in text_regions:
-                translated_text = region.get('translated_text', '')
-                if not translated_text or translated_text.strip() == '':
-                    translated_text = "Texto de ejemplo"
+            valid_regions = [r for r in text_regions if r.get('translated_text', '').strip()]
+            
+            if not valid_regions:
+                logger.warning("No hay regiones válidas con texto traducido")
+                height, width = image.shape[:2]
+                error_font = self.get_font('es', 16)
+                error_msg = "Error al procesar la imagen. Por favor, inténtelo de nuevo."
                 
-                logger.info(f"Procesando región con texto: '{translated_text}'")
+                draw.rectangle([width//4, height//4, 3*width//4, height//4 + 60], 
+                              fill=(255, 255, 255), outline=(0, 0, 0))
+                
+                try:
+                    text_bbox = draw.textbbox((0, 0), error_msg, font=error_font)
+                    text_width = text_bbox[2] - text_bbox[0]
+                except:
+                    text_width = 300
+                
+                text_x = width//2 - text_width//2
+                text_y = height//4 + 20
+                
+                draw.text((text_x, text_y), error_msg, fill=(0, 0, 0), font=error_font)
+                
+                result = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+                return result
+            
+            for region in valid_regions:
+                translated_text = region.get('translated_text', '')
                 
                 if 'bbox_simple' in region:
-                    bbox = region['bbox_simple']
-                    if len(bbox) == 4:
-                        x, y, width, height = [int(val) for val in bbox]
-                    else:
-                        continue
+                    x, y, width, height = [int(val) for val in region['bbox_simple']]
                 elif 'bbox' in region:
                     points = region['bbox']
-                    if not points:
-                        continue
-                    
                     x_coords = [int(p[0]) for p in points]
                     y_coords = [int(p[1]) for p in points]
                     x = min(x_coords)
@@ -225,41 +238,88 @@ class ImageProcessor:
                 else:
                     continue
                 
-                # Dibujar un rectángulo blanco
-                draw.rectangle([x, y, x+width, y+height], fill=(255, 255, 255))
+                img_height, img_width = image.shape[:2]
+                x = max(0, min(x, img_width - 1))
+                y = max(0, min(y, img_height - 1))
+                width = min(width, img_width - x)
+                height = min(height, img_height - y)
                 
-                # Calcular tamaño de fuente apropiado
-                font_size = max(min(height // 2, 24), 12)
-                font = self.get_font(target_language, font_size)
+                name_match = re.search(r'- ([A-Z][a-z]+ [A-Z][a-z]+)', translated_text)
+                name_text = ""
+                if name_match:
+                    name_text = name_match.group(0)
+                    translated_text = translated_text[:name_match.start()].strip()
                 
-                # Dividir texto en líneas
-                max_chars = max(10, min(25, width // (font_size // 3)))
-                lines = self._wrap_text(translated_text, max_chars)
+                draw.rectangle([x, y, x+width, y+height], fill=(255, 255, 255), outline=(200, 200, 200))
                 
-                # Calcular altura total de las líneas
+                available_width = max(width - 10, 20)
+                available_height = max(height - 10, 20)
+                
+                base_font_size = max(min(height // 3, width // 10), 12)
+                font_size = base_font_size
+                
+                try:
+                    font = self.get_font(target_language, font_size)
+                except Exception as e:
+                    logger.error(f"Error al cargar fuente: {str(e)}")
+                    font = ImageFont.load_default()
+                
+                try:
+                    lines = self._wrap_text_smart(translated_text, available_width, font)
+                    
+                    total_text_height = len(lines) * (font_size + 2)
+                    if total_text_height > available_height and len(lines) > 1:
+                        scale_factor = available_height / total_text_height
+                        new_font_size = max(int(font_size * scale_factor), 10)
+                        font = self.get_font(target_language, new_font_size)
+                        font_size = new_font_size
+                        lines = self._wrap_text_smart(translated_text, available_width, font)
+                except Exception as e:
+                    logger.error(f"Error en wrapping de texto: {str(e)}")
+                    lines = [translated_text]
+                
                 line_height = font_size + 2
                 total_text_height = len(lines) * line_height
                 
-                # Ajustar posición vertical para centrar
                 text_y = y + (height - total_text_height) // 2
                 
-                # Dibujar cada línea
                 for line in lines:
-                    # Calcular ancho de texto
                     try:
                         text_bbox = draw.textbbox((0, 0), line, font=font)
                         text_width = text_bbox[2] - text_bbox[0]
                     except:
-                        text_width = draw.textsize(line, font=font)[0]
+                        try:
+                            text_width = font.getsize(line)[0]
+                        except:
+                            text_width = len(line) * (font_size // 2)
                     
-                    # Centrar texto horizontalmente
                     text_x = x + (width - text_width) // 2
                     
-                    # Dibujar texto
+                    draw.text((text_x+1, text_y+1), line, fill=(200, 200, 200), font=font)
                     draw.text((text_x, text_y), line, fill=(0, 0, 0), font=font)
                     text_y += line_height
+                
+                if name_text:
+                    try:
+                        name_font_size = max(font_size - 2, 10)
+                        name_font = self.get_font(target_language, name_font_size)
+                        
+                        try:
+                            name_bbox = draw.textbbox((0, 0), name_text, font=name_font)
+                            name_width = name_bbox[2] - name_bbox[0]
+                        except:
+                            try:
+                                name_width = name_font.getsize(name_text)[0]
+                            except:
+                                name_width = len(name_text) * (name_font_size // 2)
+                        
+                        name_x = x + width - name_width - 5
+                        name_y = y + height - name_font_size - 5
+                        
+                        draw.text((name_x, name_y), name_text, fill=(0, 0, 0), font=name_font)
+                    except Exception as e:
+                        logger.error(f"Error al añadir nombre: {str(e)}")
             
-            # Convertir de vuelta a OpenCV
             result = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
             return result
             
@@ -269,40 +329,67 @@ class ImageProcessor:
             logger.error(traceback.format_exc())
             return image
     
-    def _wrap_text(self, text, max_chars_per_line):
+    def _wrap_text_smart(self, text, max_width, font):
+        import re
+        
         if not text:
             return []
-            
-        if len(text) <= max_chars_per_line:
-            return [text]
-            
-        words = text.split()
-        lines = []
-        current_line = []
-        current_length = 0
         
-        for word in words:
-            if current_length + len(word) + 1 > max_chars_per_line:
-                if current_line:
-                    lines.append(' '.join(current_line))
-                    current_line = [word]
-                    current_length = len(word)
-                else:
-                    if len(word) > max_chars_per_line:
-                        for i in range(0, len(word), max_chars_per_line):
-                            chunk = word[i:i + max_chars_per_line]
-                            lines.append(chunk)
-                    else:
-                        lines.append(word)
-                    current_line = []
-                    current_length = 0
+        # Intentar obtener medida de texto
+        def get_text_width(text, font):
+            try:
+                from PIL import ImageDraw
+                dummy_draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+                bbox = dummy_draw.textbbox((0, 0), text, font=font)
+                return bbox[2] - bbox[0]
+            except:
+                # Fallback aproximado
+                return len(text) * (font.size * 0.6)
+        
+        # División básica por puntuación
+        punctuation_breaks = re.split(r'([.!?:])', text)
+        sentences = []
+        
+        i = 0
+        while i < len(punctuation_breaks):
+            if i + 1 < len(punctuation_breaks) and punctuation_breaks[i+1] in '.!?:':
+                sentences.append(punctuation_breaks[i] + punctuation_breaks[i+1])
+                i += 2
             else:
-                current_line.append(word)
-                current_length += len(word) + 1
+                sentences.append(punctuation_breaks[i])
+                i += 1
         
-        if current_line:
-            lines.append(' '.join(current_line))
+        sentences = [s for s in sentences if s.strip()]
+        
+        # Procesar cada frase y hacer wrapping
+        lines = []
+        for sentence in sentences:
+            if get_text_width(sentence, font) <= max_width:
+                lines.append(sentence)
+                continue
             
+            words = sentence.split()
+            current_line = []
+            current_width = 0
+            
+            for word in words:
+                word_width = get_text_width(word + ' ', font)
+                
+                if current_width + word_width <= max_width:
+                    current_line.append(word)
+                    current_width += word_width
+                else:
+                    if current_line:
+                        lines.append(' '.join(current_line))
+                        current_line = [word]
+                        current_width = word_width
+                    else:
+                        # Si una sola palabra es muy larga
+                        lines.append(word)
+            
+            if current_line:
+                lines.append(' '.join(current_line))
+        
         return lines
     
     def process_manga_image(self, image_path, text_regions, target_language='es'):
@@ -323,8 +410,11 @@ class ImageProcessor:
                     logger.warning(f"Región sin coordenadas: {region.get('id')}")
                     continue
                 
-                if 'translated_text' not in region:
-                    region['translated_text'] = "Texto de ejemplo"
+                if 'translated_text' not in region or not region['translated_text'].strip():
+                    if 'text' in region and region['text'].strip():
+                        region['translated_text'] = region['text']
+                    else:
+                        region['translated_text'] = "Texto de ejemplo"
                     
                 valid_regions.append(region)
             
@@ -415,3 +505,5 @@ class ImageProcessor:
         os.makedirs(results_dir, exist_ok=True)
         
         return os.path.join(results_dir, f"{name}_translated{ext}")
+        
+import re  # Añadir import de re que faltaba

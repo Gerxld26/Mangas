@@ -51,6 +51,27 @@ class OCRService:
         else:
             return obj
     
+    def _clean_detected_text(self, text):
+        if not text:
+            return ""
+        
+        import re
+        
+        text = re.sub(r'^[^\w\s]+', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        text = text.replace('thcsc', 'these')
+        text = text.replace('bchind', 'behind')
+        text = text.replace('Thcy', 'They')
+        text = text.replace('andl', 'and')
+        text = text.replace('scaredl', 'scared')
+        text = text.replace('Ihat s', "That's")
+        text = text.replace('inl', 'in')
+        text = text.replace('idopting', 'adopting')
+        text = text.replace('Lincla Bl 7ir', 'Linda Blair')
+        
+        return text
+    
     def detect_text_regions(self, image_path, language='auto'):
         try:
             image = cv2.imread(image_path)
@@ -65,16 +86,15 @@ class OCRService:
             
             reader = self.get_reader(language)
             
-            # Usar parámetros seguros que sabemos que funcionan
             results = reader.readtext(
                 image, 
                 detail=1,
-                paragraph=False,  # Volvemos a False para evitar errores
+                paragraph=False,
                 rotation_info=[0],
                 width_ths=0.7,
                 height_ths=0.7,
                 contrast_ths=0.1,
-                text_threshold=0.5,
+                text_threshold=0.4,
             )
             
             text_regions = []
@@ -96,9 +116,11 @@ class OCRService:
                     width = min(image.shape[1] - x_min, width + 2 * padding)
                     height = min(image.shape[0] - y_min, height + 2 * padding)
                     
+                    cleaned_text = self._clean_detected_text(str(text))
+                    
                     region = {
                         'id': i,
-                        'text': str(text),
+                        'text': cleaned_text,
                         'confidence': float(prob) * 100,
                         'bbox': bbox_native,
                         'bbox_simple': [int(x_min), int(y_min), int(width), int(height)],
@@ -108,17 +130,14 @@ class OCRService:
                     try:
                         json.dumps(region)
                         text_regions.append(region)
-                    except TypeError as e:
+                    except TypeError:
                         region = self._numpy_to_native(region)
                         text_regions.append(region)
             
-            # Ordenar regiones por posición Y
             sorted_regions = sorted(text_regions, key=lambda r: r['bbox_simple'][1])
             
-            # Aplicar nuestro propio algoritmo de agrupación en párrafos
             merged_regions = self._group_into_paragraphs(sorted_regions)
             
-            # Convertir a tipos nativos para serialización
             merged_regions = self._numpy_to_native(merged_regions)
             
             try:
@@ -135,7 +154,6 @@ class OCRService:
             raise
     
     def _group_into_paragraphs(self, regions, distance_threshold=50):
-        """Agrupa regiones de texto en párrafos basados en proximidad y posición"""
         if not regions:
             return []
         
@@ -146,35 +164,31 @@ class OCRService:
             current = regions[i]
             prev = current_group[-1]
             
-            # Extraer coordenadas
             curr_x, curr_y, curr_w, curr_h = current['bbox_simple']
             prev_x, prev_y, prev_w, prev_h = prev['bbox_simple']
             
-            # Calcular distancia vertical y solapamiento horizontal
             vertical_distance = abs(curr_y - (prev_y + prev_h))
             horizontal_overlap = max(0, min(prev_x + prev_w, curr_x + curr_w) - max(prev_x, curr_x))
             
-            # Verificar si deben combinarse
             should_combine = False
             
-            # Si están cerca verticalmente y tienen algún solapamiento horizontal
             if vertical_distance < distance_threshold and horizontal_overlap > 0:
                 should_combine = True
             
-            # Verificar conectores lingüísticos (para casos como "porque", "y", etc.)
             curr_text = current.get('text', '').strip().lower()
-            if curr_text.startswith(('porque', 'ya que', 'por', 'aunque', 'pero', 'y ', 'si', 'cuando')):
+            prev_text = prev.get('text', '').strip().lower()
+            
+            if (prev_text and not any(prev_text.endswith(p) for p in '.!?;:')) or \
+               (curr_text and curr_text[0].islower()):
                 should_combine = True
             
             if should_combine:
                 current_group.append(current)
             else:
-                # Finalizar grupo actual y comenzar uno nuevo
                 paragraph = self._combine_paragraph(current_group)
                 paragraphs.append(paragraph)
                 current_group = [current]
         
-        # Añadir el último grupo
         if current_group:
             paragraph = self._combine_paragraph(current_group)
             paragraphs.append(paragraph)
@@ -182,19 +196,15 @@ class OCRService:
         return paragraphs
     
     def _combine_paragraph(self, regions):
-        """Combina múltiples regiones en un solo párrafo"""
         if len(regions) == 1:
             return regions[0]
         
-        # Copiar la primera región como base
         combined = regions[0].copy()
         
-        # Combinar textos de todas las regiones
         texts = [r.get('text', '') for r in regions]
         combined_text = ' '.join(texts)
         combined['text'] = combined_text
         
-        # Calcular bounding box combinado
         min_x = min(r['bbox_simple'][0] for r in regions)
         min_y = min(r['bbox_simple'][1] for r in regions)
         max_x = max(r['bbox_simple'][0] + r['bbox_simple'][2] for r in regions)
@@ -203,13 +213,10 @@ class OCRService:
         width = max_x - min_x
         height = max_y - min_y
         
-        # Actualizar bbox simple
         combined['bbox_simple'] = [int(min_x), int(min_y), int(width), int(height)]
         
-        # Actualizar id para reflejar combinación
         combined['id'] = f"{regions[0]['id']}-{regions[-1]['id']}"
         
-        # Actualizar confianza (promedio)
         confidences = [r.get('confidence', 0) for r in regions]
         combined['confidence'] = sum(confidences) / len(confidences)
         
